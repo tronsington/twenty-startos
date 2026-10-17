@@ -1,7 +1,10 @@
 export const short = {
-  en_US: 'The open-source CRM — customers, pipelines and workflows, self-hosted',
-  es_ES: 'El CRM de código abierto — clientes, pipelines y flujos de trabajo, autoalojado',
-  de_DE: 'Das Open-Source-CRM — Kunden, Pipelines und Workflows, selbst gehostet',
+  en_US:
+    'The open-source CRM — customers, pipelines and workflows, self-hosted',
+  es_ES:
+    'El CRM de código abierto — clientes, pipelines y flujos de trabajo, autoalojado',
+  de_DE:
+    'Das Open-Source-CRM — Kunden, Pipelines und Workflows, selbst gehostet',
   pl_PL: 'CRM open-source — klienci, pipeline’y i przepływy pracy, self-hosted',
   fr_FR: 'Le CRM open source — clients, pipelines et workflows, auto-hébergé',
 }

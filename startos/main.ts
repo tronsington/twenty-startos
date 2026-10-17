@@ -89,124 +89,122 @@ export const main = sdk.setupMain(async ({ effects }) => {
     'twenty-worker',
   )
 
-  return (
-    sdk.Daemons.of(effects)
-      .addDaemon('postgres', {
-        subcontainer: postgresSub,
-        exec: {
-          command: sdk.useEntrypoint(['-c', 'listen_addresses=127.0.0.1']),
-          env: {
-            POSTGRES_DB,
+  return sdk.Daemons.of(effects)
+    .addDaemon('postgres', {
+      subcontainer: postgresSub,
+      exec: {
+        command: sdk.useEntrypoint(['-c', 'listen_addresses=127.0.0.1']),
+        env: {
+          POSTGRES_DB,
+          POSTGRES_USER,
+          POSTGRES_PASSWORD: pgPassword,
+        },
+      },
+      ready: {
+        display: null,
+        fn: async () => {
+          const result = await postgresSub.exec([
+            'pg_isready',
+            '-q',
+            '-h',
+            '127.0.0.1',
+            '-U',
             POSTGRES_USER,
-            POSTGRES_PASSWORD: pgPassword,
-          },
+            '-d',
+            POSTGRES_DB,
+          ])
+          return result.exitCode === 0
+            ? { result: 'success', message: i18n('PostgreSQL is ready') }
+            : {
+                result: 'starting',
+                message: i18n('Waiting for PostgreSQL to be ready'),
+              }
         },
-        ready: {
-          display: null,
-          fn: async () => {
-            const result = await postgresSub.exec([
-              'pg_isready',
-              '-q',
-              '-h',
-              '127.0.0.1',
-              '-U',
-              POSTGRES_USER,
-              '-d',
-              POSTGRES_DB,
-            ])
-            return result.exitCode === 0
-              ? { result: 'success', message: i18n('PostgreSQL is ready') }
-              : {
-                  result: 'starting',
-                  message: i18n('Waiting for PostgreSQL to be ready'),
-                }
-          },
-          gracePeriod: 30_000,
+        gracePeriod: 30_000,
+      },
+      requires: [],
+    })
+    .addDaemon('redis', {
+      subcontainer: redisSub,
+      exec: {
+        command: sdk.useEntrypoint(['--maxmemory-policy', 'noeviction']),
+      },
+      ready: {
+        display: null,
+        fn: async () => {
+          const result = await redisSub.exec(['redis-cli', 'ping'])
+          return result.exitCode === 0 &&
+            result.stdout.toString().trim() === 'PONG'
+            ? { result: 'success', message: i18n('Redis is ready') }
+            : {
+                result: 'starting',
+                message: i18n('Waiting for Redis to be ready'),
+              }
         },
-        requires: [],
-      })
-      .addDaemon('redis', {
-        subcontainer: redisSub,
-        exec: {
-          command: sdk.useEntrypoint(['--maxmemory-policy', 'noeviction']),
+        gracePeriod: 30_000,
+      },
+      requires: [],
+    })
+    .addDaemon('server', {
+      subcontainer: serverSub,
+      exec: {
+        // Upstream entrypoint already runs the server and (unless disabled)
+        // the DB migrations at boot — the upgrade gate.
+        command: sdk.useEntrypoint(),
+        env: {
+          NODE_PORT: String(SERVER_PORT),
+          PG_DATABASE_URL: pgUrl,
+          SERVER_URL: serverUrl,
+          REDIS_URL: redisUrl,
+          STORAGE_TYPE: 'local',
+          APP_SECRET: appSecret,
+          ENCRYPTION_KEY: encryptionKey,
+          FALLBACK_ENCRYPTION_KEY: fallbackEncryptionKey,
         },
-        ready: {
-          display: null,
-          fn: async () => {
-            const result = await redisSub.exec(['redis-cli', 'ping'])
-            return result.exitCode === 0 &&
-              result.stdout.toString().trim() === 'PONG'
-              ? { result: 'success', message: i18n('Redis is ready') }
-              : {
-                  result: 'starting',
-                  message: i18n('Waiting for Redis to be ready'),
-                }
-          },
-          gracePeriod: 30_000,
+      },
+      ready: {
+        display: i18n('Twenty'),
+        fn: () =>
+          sdk.healthCheck.checkWebUrl(
+            effects,
+            `http://127.0.0.1:${SERVER_PORT}/healthz`,
+            {
+              successMessage: i18n('Twenty is ready'),
+              errorMessage: i18n('Twenty is not ready'),
+            },
+          ),
+        // First boot creates the schema before serving.
+        gracePeriod: 120_000,
+      },
+      requires: ['postgres', 'redis'],
+    })
+    .addDaemon('worker', {
+      subcontainer: workerSub,
+      exec: {
+        command: ['yarn', 'worker:prod'],
+        env: {
+          PG_DATABASE_URL: pgUrl,
+          SERVER_URL: serverUrl,
+          REDIS_URL: redisUrl,
+          STORAGE_TYPE: 'local',
+          APP_SECRET: appSecret,
+          ENCRYPTION_KEY: encryptionKey,
+          FALLBACK_ENCRYPTION_KEY: fallbackEncryptionKey,
+          // Server already ran them; upstream compose disables both here.
+          DISABLE_DB_MIGRATIONS: 'true',
+          DISABLE_CRON_JOBS_REGISTRATION: 'true',
         },
-        requires: [],
-      })
-      .addDaemon('server', {
-        subcontainer: serverSub,
-        exec: {
-          // Upstream entrypoint already runs the server and (unless disabled)
-          // the DB migrations at boot — the upgrade gate.
-          command: sdk.useEntrypoint(),
-          env: {
-            NODE_PORT: String(SERVER_PORT),
-            PG_DATABASE_URL: pgUrl,
-            SERVER_URL: serverUrl,
-            REDIS_URL: redisUrl,
-            STORAGE_TYPE: 'local',
-            APP_SECRET: appSecret,
-            ENCRYPTION_KEY: encryptionKey,
-            FALLBACK_ENCRYPTION_KEY: fallbackEncryptionKey,
-          },
+      },
+      ready: {
+        display: null, // internal worker, no port of its own
+        fn: async () => {
+          const result = await workerSub.exec(['pgrep', '-f', 'twenty-server'])
+          return result.exitCode === 0
+            ? { result: 'success', message: i18n('Worker is running') }
+            : { result: 'failure', message: i18n('Worker is not running') }
         },
-        ready: {
-          display: i18n('Twenty'),
-          fn: () =>
-            sdk.healthCheck.checkWebUrl(
-              effects,
-              `http://127.0.0.1:${SERVER_PORT}/healthz`,
-              {
-                successMessage: i18n('Twenty is ready'),
-                errorMessage: i18n('Twenty is not ready'),
-              },
-            ),
-          // First boot creates the schema before serving.
-          gracePeriod: 120_000,
-        },
-        requires: ['postgres', 'redis'],
-      })
-      .addDaemon('worker', {
-        subcontainer: workerSub,
-        exec: {
-          command: ['yarn', 'worker:prod'],
-          env: {
-            PG_DATABASE_URL: pgUrl,
-            SERVER_URL: serverUrl,
-            REDIS_URL: redisUrl,
-            STORAGE_TYPE: 'local',
-            APP_SECRET: appSecret,
-            ENCRYPTION_KEY: encryptionKey,
-            FALLBACK_ENCRYPTION_KEY: fallbackEncryptionKey,
-            // Server already ran them; upstream compose disables both here.
-            DISABLE_DB_MIGRATIONS: 'true',
-            DISABLE_CRON_JOBS_REGISTRATION: 'true',
-          },
-        },
-        ready: {
-          display: null, // internal worker, no port of its own
-          fn: async () => {
-            const result = await workerSub.exec(['pgrep', '-f', 'twenty-server'])
-            return result.exitCode === 0
-              ? { result: 'success', message: i18n('Worker is running') }
-              : { result: 'failure', message: i18n('Worker is not running') }
-          },
-          gracePeriod: 60_000,
-        },
-        requires: ['server', 'postgres', 'redis'],
-      })
-  )
+        gracePeriod: 60_000,
+      },
+      requires: ['server', 'postgres', 'redis'],
+    })
 })

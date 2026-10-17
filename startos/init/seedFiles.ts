@@ -11,7 +11,10 @@ export const seedFiles = sdk.setupOnInit(async (effects, kind) => {
     pgPassword: utils.getDefaultString({ charset: 'a-z,A-Z,0-9', len: 22 }),
     appSecret: utils.getDefaultString({ charset: 'a-z,A-Z,0-9', len: 40 }),
     encryptionKey: utils.getDefaultString({ charset: '0-9,a-f', len: 64 }),
-    fallbackEncryptionKey: utils.getDefaultString({ charset: '0-9,a-f', len: 64 }),
+    fallbackEncryptionKey: utils.getDefaultString({
+      charset: '0-9,a-f',
+      len: 64,
+    }),
   })
 
   await sdk.action.createOwnTask(effects, setServerUrl, 'critical', {
