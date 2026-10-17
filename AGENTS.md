@@ -17,11 +17,19 @@ StartOS service-package repository for [Twenty](https://github.com/twentyhq/twen
 - **STORAGE_TYPE=local** on the `storage` volume, mounted into BOTH server and
   worker at upstream's exact path (`/app/packages/twenty-server/.local-storage`).
   Diverge and uploads break silently.
+- **The `chown-storage` oneshot (uid 1000) is load-bearing** — the image runs
+  as uid 1000 and the StartOS volume mount shadows the image's baked-in
+  ownership of `.local-storage`. Without it the server boots green and then
+  dies on its first storage write (workspace creation / uploads) with
+  EACCES — this exact failure shipped in 2.48.0:0 and was fixed in 2.48.0:1,
+  verified live on Dylan's box. Never remove or weaken it.
 - store.json lives on `main`, never mounted into daemons.
 - Backups = pg_dump(pgdata) + raw `storage` + raw `main`. Rotating
   ENCRYPTION_KEY or APP_SECRET on restore is user data loss — never re-roll.
 
-## Known-untested (verify on first real install)
+## Verified on real install (2026-10-17, Dylan's box, 2.48.0:0→:1)
 
-- Worker's `pgrep -f twenty-server` health probe matches the real cmdline.
-- /healthz probe across a cold first boot with migrations (grace: 120 s).
+- Worker's `pgrep -f twenty-server` health probe matches the real cmdline —
+  worker logged crons ticking in live dumps.
+- /healthz probe across a cold first boot with migrations (grace: 120 s) —
+  migrations ran ~95 s, healthz green after, no flapping.

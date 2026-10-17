@@ -89,7 +89,37 @@ export const main = sdk.setupMain(async ({ effects }) => {
     'twenty-worker',
   )
 
+  /**
+   * ======================== chown-storage oneshot ========================
+   */
+  const chownSub = sdk.SubContainer.of(
+    effects,
+    { imageId: 'twenty' },
+    sdk.Mounts.of().mountVolume({
+      volumeId: 'storage',
+      subpath: null,
+      mountpoint: STORAGE_PATH,
+      readonly: false,
+    }),
+    'chown-storage',
+  )
+
   return sdk.Daemons.of(effects)
+    .addOneshot('chown-storage', {
+      // A fresh StartOS volume mounts root-owned and shadows the ownership
+      // the twenty image bakes into .local-storage (the image runs as uid
+      // 1000). Server and worker both write here (workspace seeding, user
+      // uploads); without this oneshot the server boots green and then dies
+      // on its first storage write with EACCES — seen live as a failing
+      // workspace-creation step (v2.48.0:0 bug, fixed in 2.48.0:1). Same
+      // shape as outline's chown-outline and monica's chown-storage.
+      subcontainer: chownSub,
+      exec: {
+        command: ['chown', '-R', '1000:1000', STORAGE_PATH],
+        user: 'root',
+      },
+      requires: [],
+    })
     .addDaemon('postgres', {
       subcontainer: postgresSub,
       exec: {
@@ -176,7 +206,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
         // First boot creates the schema before serving.
         gracePeriod: 120_000,
       },
-      requires: ['postgres', 'redis'],
+      requires: ['postgres', 'redis', 'chown-storage'],
     })
     .addDaemon('worker', {
       subcontainer: workerSub,
@@ -205,6 +235,6 @@ export const main = sdk.setupMain(async ({ effects }) => {
         },
         gracePeriod: 60_000,
       },
-      requires: ['server', 'postgres', 'redis'],
+      requires: ['server', 'postgres', 'redis', 'chown-storage'],
     })
 })
