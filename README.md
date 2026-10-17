@@ -15,7 +15,7 @@ make arm        # twenty_aarch64.s9pk (upstream publishes both)
 
 |              |                                                                                                                     |
 | ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Upstream pin | `twentycrm/twenty@sha256:0afdba14…` = **v2.9.0** (amd64+arm64, digest-pinned)                                       |
+| Upstream pin | `twentycrm/twenty@sha256:43fab4bf…` = **v2.48.0** (amd64+arm64, digest-pinned)                                       |
 | Sidecars     | `postgres:16@sha256:ca0bd484…`, `redis:7-alpine@sha256:858f009f…`                                                   |
 | Interface    | one web UI + API on port 3000                                                                                       |
 | Secrets      | `APP_SECRET` / `ENCRYPTION_KEY` / `FALLBACK_ENCRYPTION_KEY` / `PG password` — generated at install, never re-rolled |

@@ -14,11 +14,15 @@ export const manifest = setupManifest({
   // files); main = this package's own store.json. Do not co-locate.
   volumes: ['pgdata', 'storage', 'main'],
   images: {
-    // twenty v2.9.0 on Docker Hub, pinned by digest; verified amd64+arm64.
+    // twenty v2.48.0 on Docker Hub, pinned by digest; verified amd64+arm64
+    // (index digest, resolved 2026-10-17; equals the current `latest`).
+    // NOTE the tag-shape trap: bare `v2.9.0` is the newest *bare* tag but is
+    // four months stale — upstream versions now ship as prefixed tags
+    // (`twenty/v2.48.0`). Check recency, not just version shape.
     twenty: {
       source: {
         dockerTag:
-          'twentycrm/twenty@sha256:0afdba1494ea50bad6eb278a20ae35933317483f23501157c2ed866b74d4bc4a',
+          'twentycrm/twenty@sha256:43fab4bffacdcd63ff3c9257b7f8985a4424d81e9eb43982b9c16a841d555e52',
       },
       arch: ['x86_64', 'aarch64'],
     },
